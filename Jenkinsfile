@@ -15,8 +15,7 @@ pipeline {
         stage('Load Apps Config') {
             steps {
                 script { 
-                    def apps = readJSON file: 'apps.json'
-                    env.APPS_JSON = groovy.json.JsonOutput.toJson(apps)
+                    apps = readJSON file: 'apps.json'
                 }
             }
         }
