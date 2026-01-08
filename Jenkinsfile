@@ -54,18 +54,28 @@ pipeline {
                             }
 
                             stage("Deploy ${app.name}") {
-                                // Replace placeholders in the YAML with real values
-                                sh """
-                                    sed -i 's|\\\${APP_NAME}|${app.name}|g' ${app.k3s_deployment}
-                                    sed -i 's|\\\${APP_IMAGE}|${app.docker_image}:${BUILD_NUMBER}|g' ${app.k3s_deployment}
-                                """
+                                script {
+                                    // Use a temp file for this deployment
+                                    def tempDeployment = "temp-${app.name}-deployment.yaml"
+                                    def tempService = "temp-${app.name}-service.yaml"
                             
-                                // Apply the deployment and service
-                                sh "kubectl --kubeconfig=${KUBECONFIG_PATH} apply -f ${app.k3s_deployment}"
-                                sh "kubectl --kubeconfig=${KUBECONFIG_PATH} apply -f ${app.k3s_service}"
+                                    sh "cp ${app.k3s_deployment} ${tempDeployment}"
+                                    sh "cp ${app.k3s_service} ${tempService}"
                             
-                                // Rollout restart using the real deployment name (not filename)
-                                sh "kubectl --kubeconfig=${KUBECONFIG_PATH} rollout restart deployment ${app.name}-deployment"
+                                    // Replace placeholders in temp files
+                                    sh """
+                                        sed -i 's|\\\${APP_NAME}|${app.name}|g' ${tempDeployment} ${tempService}
+                                        sed -i 's|\\\${APP_IMAGE}|${app.docker_image}:${BUILD_NUMBER}|g' ${tempDeployment}
+                                        sed -i 's|\\\${NODE_PORT}|${app.node_port}|g' ${tempService}
+                                    """
+                            
+                                    // Apply deployment and service
+                                    sh "kubectl --kubeconfig=${KUBECONFIG} apply -f ${tempDeployment}"
+                                    sh "kubectl --kubeconfig=${KUBECONFIG} apply -f ${tempService}"
+                            
+                                    // Rollout restart
+                                    sh "kubectl --kubeconfig=${KUBECONFIG} rollout restart deployment ${app.name}-deployment"
+                                }
                             }
                         }
                     }
