@@ -33,7 +33,13 @@ pipeline {
                             }
 
                             stage("Build Docker ${app.name}") {
-                                sh "docker build --no-cache --build-arg APP_NAME=${app.name} --build-arg APP_TYPE=${app.app_type} -t ${app.docker_image}:latest ./"
+                                sh """
+                                    docker build \
+                                        --no-cache \
+                                        --build-arg APP_NAME=${app.name} \
+                                        --build-arg APP_TYPE=${app.app_type} \
+                                        -t ${app.docker_image}:latest ./${app.name}
+                                """
                             }
 
                             stage("Tag Docker ${app.name}") {
