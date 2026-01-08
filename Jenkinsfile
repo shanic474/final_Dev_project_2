@@ -54,10 +54,18 @@ pipeline {
                             }
 
                             stage("Deploy ${app.name}") {
-                                sh "sed -i 's|image: .*|image: ${app.docker_image}:${BUILD_NUMBER}|g' ${app.k3s_deployment}"
-                                sh "kubectl apply -f ${app.k3s_deployment}"
-                                sh "kubectl rollout restart deployment ${app.k3s_deployment.replace('.yaml','')}"
-                                sh "kubectl apply -f ${app.k3s_service}"
+                                // Replace placeholders in the YAML with real values
+                                sh """
+                                    sed -i 's|\\\${APP_NAME}|${app.name}|g' ${app.k3s_deployment}
+                                    sed -i 's|\\\${APP_IMAGE}|${app.docker_image}:${BUILD_NUMBER}|g' ${app.k3s_deployment}
+                                """
+                            
+                                // Apply the deployment and service
+                                sh "kubectl --kubeconfig=${KUBECONFIG_PATH} apply -f ${app.k3s_deployment}"
+                                sh "kubectl --kubeconfig=${KUBECONFIG_PATH} apply -f ${app.k3s_service}"
+                            
+                                // Rollout restart using the real deployment name (not filename)
+                                sh "kubectl --kubeconfig=${KUBECONFIG_PATH} rollout restart deployment ${app.name}-deployment"
                             }
                         }
                     }
