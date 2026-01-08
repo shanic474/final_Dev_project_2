@@ -38,7 +38,8 @@ pipeline {
                                         --no-cache \
                                         --build-arg APP_NAME=${app.name} \
                                         --build-arg APP_TYPE=${app.app_type} \
-                                        -t ${app.docker_image}:latest ./${app.name}
+                                        -t ${app.docker_image}:latest \
+                                        -f Dockerfile ./${app.name}
                                 """
                             }
 
