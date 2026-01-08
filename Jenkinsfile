@@ -16,7 +16,6 @@ pipeline {
             steps {
                 script { 
                     def apps = readJSON file: 'apps.json'
-                    // save to env so we can use later
                     env.APPS_JSON = groovy.json.JsonOutput.toJson(apps)
                 }
             }
@@ -57,20 +56,23 @@ pipeline {
 
                             stage("Deploy ${app.name}") {
                                 script {
-                                    def tempDeployment = "temp-${app.name}-deployment.yaml"
-                                    def tempService = "temp-${app.name}-service.yaml"
-
-                                    sh "cp ${app.k3s_deployment} ${tempDeployment}"
-                                    sh "cp ${app.k3s_service} ${tempService}"
-
+                                    // Apply deployment with placeholders replaced on the fly
                                     sh """
-                                        sed -i 's|\\\${APP_NAME}|${app.name}|g' ${tempDeployment} ${tempService}
-                                        sed -i 's|\\\${APP_IMAGE}|${app.docker_image}:${BUILD_NUMBER}|g' ${tempDeployment}
-                                        sed -i 's|\\\${NODE_PORT}|${app.node_port}|g' ${tempService}
+                                        sed \
+                                            -e 's|\\\${APP_NAME}|${app.name}|g' \
+                                            -e 's|\\\${APP_IMAGE}|${app.docker_image}:${BUILD_NUMBER}|g' \
+                                            -e 's|\\\${NODE_PORT}|${app.node_port}|g' \
+                                            ${app.k3s_deployment} | kubectl --kubeconfig=${KUBECONFIG} apply -f -
                                     """
 
-                                    sh "kubectl --kubeconfig=${KUBECONFIG} apply -f ${tempDeployment}"
-                                    sh "kubectl --kubeconfig=${KUBECONFIG} apply -f ${tempService}"
+                                    sh """
+                                        sed \
+                                            -e 's|\\\${APP_NAME}|${app.name}|g' \
+                                            -e 's|\\\${APP_IMAGE}|${app.docker_image}:${BUILD_NUMBER}|g' \
+                                            -e 's|\\\${NODE_PORT}|${app.node_port}|g' \
+                                            ${app.k3s_service} | kubectl --kubeconfig=${KUBECONFIG} apply -f -
+                                    """
+
                                     sh "kubectl --kubeconfig=${KUBECONFIG} rollout restart deployment ${app.name}-deployment"
                                 }
                             }
