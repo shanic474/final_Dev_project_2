@@ -15,7 +15,9 @@ pipeline {
         stage('Load Apps Config') {
             steps {
                 script { 
-                    apps = readJSON file: 'apps.json' 
+                    def apps = readJSON file: 'apps.json'
+                    // save to env so we can use later
+                    env.APPS_JSON = groovy.json.JsonOutput.toJson(apps)
                 }
             }
         }
@@ -23,13 +25,13 @@ pipeline {
         stage('Build, Push, Deploy Apps in Parallel') {
             steps {
                 script {
+                    def apps = new groovy.json.JsonSlurper().parseText(env.APPS_JSON)
                     def branches = [:]
 
                     apps.each { app ->
                         branches[app.name] = {
                             stage("Clone ${app.name}") {
                                 sh "git clone --branch ${app.branch} --single-branch ${app.git_url} ${app.name}"
-
                             }
 
                             stage("Build Docker ${app.name}") {
@@ -48,32 +50,27 @@ pipeline {
                             }
 
                             stage("Push Docker ${app.name}") {
-                                withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]){
+                                withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
                                     sh "echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin && docker push ${app.docker_image}:${BUILD_NUMBER}"
                                 }
                             }
 
                             stage("Deploy ${app.name}") {
                                 script {
-                                    // Use a temp file for this deployment
                                     def tempDeployment = "temp-${app.name}-deployment.yaml"
                                     def tempService = "temp-${app.name}-service.yaml"
-                            
+
                                     sh "cp ${app.k3s_deployment} ${tempDeployment}"
                                     sh "cp ${app.k3s_service} ${tempService}"
-                            
-                                    // Replace placeholders in temp files
+
                                     sh """
                                         sed -i 's|\\\${APP_NAME}|${app.name}|g' ${tempDeployment} ${tempService}
                                         sed -i 's|\\\${APP_IMAGE}|${app.docker_image}:${BUILD_NUMBER}|g' ${tempDeployment}
                                         sed -i 's|\\\${NODE_PORT}|${app.node_port}|g' ${tempService}
                                     """
-                            
-                                    // Apply deployment and service
+
                                     sh "kubectl --kubeconfig=${KUBECONFIG} apply -f ${tempDeployment}"
                                     sh "kubectl --kubeconfig=${KUBECONFIG} apply -f ${tempService}"
-                            
-                                    // Rollout restart
                                     sh "kubectl --kubeconfig=${KUBECONFIG} rollout restart deployment ${app.name}-deployment"
                                 }
                             }
@@ -84,5 +81,5 @@ pipeline {
                 }
             }
         }
-    } // end stages
+    }
 }
