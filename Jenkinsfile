@@ -77,6 +77,7 @@ pipeline {
                                     sh "kubectl --kubeconfig=${KUBECONFIG} rollout restart deployment ${app.name}-deployment"
                                 }
                             }
+
                         }
                     }
 
