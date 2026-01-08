@@ -1,32 +1,32 @@
 [
   {
     "name": "server",
+    "branch": "dev",
     "git_url": "https://github.com/shanic474/Server-FullStack-final-Project.git",
     "docker_image": "s10shani/server-app",
-    "k3s_deployment": "proj2-deployment.yaml",
-    "k3s_service": "proj2-service.yaml",
-    "node_port": 31001,
-     "branch": "dev",
-    "app_type": "backend"
-  },
-  {
-    "name": "dashboard",
-    "git_url": "https://github.com/shanic474/Dashboard-FullStack-final-Project.git",
-    "docker_image": "s10shani/dashboard-app",
-    "k3s_deployment": "proj2-deployment.yaml",
-    "k3s_service": "proj2-service.yaml",
-    "node_port": 31002,
-     "branch": "dev",
-    "app_type": "frontend"
+    "app_type": "backend",
+    "k3s_deployment": "k8s/server-deployment.yaml",
+    "k3s_service": "k8s/server-service.yaml",
+    "node_port": 30001
   },
   {
     "name": "client",
+    "branch": "dev",
     "git_url": "https://github.com/shanic474/Client-FullStack-final-Project.git",
     "docker_image": "s10shani/client-app",
-    "k3s_deployment": "proj2-deployment.yaml",
-    "k3s_service": "proj2-service.yaml",
-    "node_port": 31003,
-     "branch": "dev",
-    "app_type": "frontend"
+    "app_type": "frontend",
+    "k3s_deployment": "k8s/client-deployment.yaml",
+    "k3s_service": "k8s/client-service.yaml",
+    "node_port": 30002
+  },
+  {
+    "name": "dashboard",
+    "branch": "dev",
+    "git_url": "https://github.com/shanic474/Dashboard-FullStack-final-Project.git",
+    "docker_image": "s10shani/dashboard-app",
+    "app_type": "frontend",
+    "k3s_deployment": "k8s/dashboard-deployment.yaml",
+    "k3s_service": "k8s/dashboard-service.yaml",
+    "node_port": 30003
   }
 ]
