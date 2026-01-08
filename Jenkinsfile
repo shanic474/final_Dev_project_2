@@ -64,9 +64,9 @@ pipeline {
                                     
                                     // Replace placeholders
                                     sh """
-                                        sed -i 's|\\\${APP_NAME}|${app.name}|g' ${tempDeployment} ${tempService}
-                                        sed -i 's|\\\${APP_IMAGE}|${app.docker_image}:${BUILD_NUMBER}|g' ${tempDeployment}
-                                        sed -i 's|\\\${NODE_PORT}|${app.node_port}|g' ${tempService}
+                                        sed -i "s|\${APP_NAME}|${app.name}|g" ${tempDeployment} ${tempService}
+                                        sed -i "s|\${DOCKER_IMAGE}:${BUILD_NUMBER}|${app.docker_image}:${BUILD_NUMBER}|g" ${tempDeployment}
+                                        sed -i "s|\${NODE_PORT}|${app.node_port}|g" ${tempService}
                                     """
                                     
                                     // Apply K3s deployment/service
