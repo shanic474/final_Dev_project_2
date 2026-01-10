@@ -18,3 +18,4 @@ spec:
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 80
+          command: ["node", "/app/app.js"]
