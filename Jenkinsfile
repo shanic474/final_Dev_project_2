@@ -1,88 +1,117 @@
 pipeline {
     agent any
+
     environment {
-        DOCKERHUB_CREDENTIALS = credentials('dockerhub-credentials')
-        KUBECONFIG = "/etc/rancher/k3s/k3s.yaml"
+        DOCKER_USER = 's10shani'
+        DOCKER_PASS = credentials('dockerhub-credentials')
+        KUBECONFIG = '/var/lib/jenkins/.kube/config' // צריך kubeconfig עם הרשאות
     }
 
     stages {
+
         stage('Clean Old Apps') {
-            steps {
-                sh 'rm -rf server dashboard client'  // remove old cloned app repos
+            steps { sh 'rm -rf server client dashboard' }
+        }
+
+        stage('Clone Repos') {
+            parallel {
+                stage('Clone server') { steps { sh 'git clone --branch dev --single-branch https://github.com/shanic474/Server-FullStack-final-Project.git server' } }
+                stage('Clone client') { steps { sh 'git clone --branch dev --single-branch https://github.com/shanic474/Client-FullStack-final-Project.git client' } }
+                stage('Clone dashboard') { steps { sh 'git clone --branch dev --single-branch https://github.com/shanic474/Dashboard-FullStack-final-Project.git dashboard' } }
             }
         }
 
-        stage('Load Apps Config') {
+        stage('Build Docker Images') {
+            parallel {
+                stage('Build server') { steps { sh 'docker build --no-cache --build-arg APP_NAME=server --build-arg APP_TYPE=backend -t s10shani/server-app:latest -f Dockerfile ./server' } }
+                stage('Build client') { steps { sh 'docker build --no-cache --build-arg APP_NAME=client --build-arg APP_TYPE=frontend -t s10shani/client-app:latest -f Dockerfile ./client' } }
+                stage('Build dashboard') { steps { sh 'docker build --no-cache --build-arg APP_NAME=dashboard --build-arg APP_TYPE=frontend -t s10shani/dashboard-app:latest -f Dockerfile ./dashboard' } }
+            }
+        }
+
+        stage('Tag & Push Docker Images') {
             steps {
-                script { 
-                    // Load apps.json as a Groovy object (no toJson, sandbox-safe)
-                    apps = readJSON file: 'apps.json'
+                withCredentials([string(credentialsId: 'dockerhub-credentials', variable: 'DOCKER_PASS')]) {
+                    sh '''
+                        echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
+                        docker tag s10shani/server-app:latest s10shani/server-app:20
+                        docker tag s10shani/client-app:latest s10shani/client-app:20
+                        docker tag s10shani/dashboard-app:latest s10shani/dashboard-app:20
+                        docker push s10shani/server-app:20
+                        docker push s10shani/client-app:20
+                        docker push s10shani/dashboard-app:20
+                    '''
                 }
             }
         }
 
-        stage('Build, Push, Deploy Apps in Parallel') {
-            steps {
-                script {
-                    def branches = [:]
+        stage('Deploy Apps in Parallel') {
+            parallel {
+                stage('Deploy Server') {
+                    steps {
+                        script {
+                            sh 'cp proj2-deployment.yaml temp-server-deployment.yaml'
+                            sh 'cp proj2-service.yaml temp-server-service.yaml'
+                            sh 'sed -i s|\\${APP_NAME}|server|g temp-server-deployment.yaml temp-server-service.yaml'
+                            sh 'sed -i s|\\${APP_IMAGE}|s10shani/server-app:20|g temp-server-deployment.yaml'
+                            sh 'sed -i s|\\${NODE_PORT}|30001|g temp-server-service.yaml'
 
-                    apps.each { app ->
-                        branches[app.name] = {
-                            stage("Clone ${app.name}") {
-                                sh "git clone --branch ${app.branch} --single-branch ${app.git_url} ${app.name}"
-                            }
-
-                            stage("Build Docker ${app.name}") {
-                                sh """
-                                    docker build \
-                                        --no-cache \
-                                        --build-arg APP_NAME=${app.name} \
-                                        --build-arg APP_TYPE=${app.app_type} \
-                                        -t ${app.docker_image}:latest \
-                                        -f Dockerfile ./${app.name}
-                                """
-                            }
-
-                            stage("Tag Docker ${app.name}") {
-                                sh "docker tag ${app.docker_image}:latest ${app.docker_image}:${BUILD_NUMBER}"
-                            }
-
-                            stage("Push Docker ${app.name}") {
-                                withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                                    sh "echo \$DOCKER_PASS | docker login -u \$DOCKER_USER --password-stdin && docker push ${app.docker_image}:${BUILD_NUMBER}"
-                                }
-                            }
-
-                            stage("Deploy ${app.name}") {
-                                script {
-                                    // Temp deployment/service files
-                                    def tempDeployment = "temp-${app.name}-deployment.yaml"
-                                    def tempService = "temp-${app.name}-service.yaml"
-                                    
-                                    sh "cp ${app.k3s_deployment} ${tempDeployment}"
-                                    sh "cp ${app.k3s_service} ${tempService}"
-                                    
-                                    // Replace placeholders
-                                    sh """
-                                        sed -i 's|\\\${APP_NAME}|${app.name}|g' ${tempDeployment} ${tempService}
-                                        sed -i 's|\\\${APP_IMAGE}|${app.docker_image}:${BUILD_NUMBER}|g' ${tempDeployment}
-                                        sed -i 's|\\\${NODE_PORT}|${app.node_port}|g' ${tempService}
-                                    """
-                                    
-                                    // Apply K3s deployment/service
-                                    sh "kubectl --kubeconfig=${KUBECONFIG} apply -f ${tempDeployment} --validate=false"
-                                    sh "kubectl --kubeconfig=${KUBECONFIG} apply -f ${tempService} --validate=false"
-                                    
-                                    // Rollout restart
-                                    sh "kubectl --kubeconfig=${KUBECONFIG} rollout restart deployment ${app.name}-deployment"
-                                }
+                            // Retry ל-server
+                            retry(3) {
+                                sh '''
+                                    kubectl --kubeconfig=$KUBECONFIG apply -f temp-server-deployment.yaml --validate=false
+                                    kubectl --kubeconfig=$KUBECONFIG rollout status deployment server-deployment --timeout=120s
+                                '''
                             }
                         }
                     }
+                }
 
-                    parallel branches
+                stage('Deploy Client') {
+                    steps {
+                        script {
+                            // מחכה ל-server להיות מוכן
+                            retry(3) {
+                                sh 'kubectl --kubeconfig=$KUBECONFIG rollout status deployment server-deployment --timeout=120s || exit 1'
+                            }
+
+                            sh 'cp proj2-deployment.yaml temp-client-deployment.yaml'
+                            sh 'cp proj2-service.yaml temp-client-service.yaml'
+                            sh 'sed -i s|\\${APP_NAME}|client|g temp-client-deployment.yaml temp-client-service.yaml'
+                            sh 'sed -i s|\\${APP_IMAGE}|s10shani/client-app:20|g temp-client-deployment.yaml'
+                            sh 'sed -i s|\\${NODE_PORT}|30002|g temp-client-service.yaml'
+
+                            // Retry ל-client
+                            retry(3) {
+                                sh 'kubectl --kubeconfig=$KUBECONFIG apply -f temp-client-deployment.yaml --validate=false'
+                            }
+                        }
+                    }
+                }
+
+                stage('Deploy Dashboard') {
+                    steps {
+                        script {
+                            // מחכה ל-server להיות מוכן
+                            retry(3) {
+                                sh 'kubectl --kubeconfig=$KUBECONFIG rollout status deployment server-deployment --timeout=120s || exit 1'
+                            }
+
+                            sh 'cp proj2-deployment.yaml temp-dashboard-deployment.yaml'
+                            sh 'cp proj2-service.yaml temp-dashboard-service.yaml'
+                            sh 'sed -i s|\\${APP_NAME}|dashboard|g temp-dashboard-deployment.yaml temp-dashboard-service.yaml'
+                            sh 'sed -i s|\\${APP_IMAGE}|s10shani/dashboard-app:20|g temp-dashboard-deployment.yaml'
+                            sh 'sed -i s|\\${NODE_PORT}|30003|g temp-dashboard-service.yaml'
+
+                            // Retry ל-dashboard
+                            retry(3) {
+                                sh 'kubectl --kubeconfig=$KUBECONFIG apply -f temp-dashboard-deployment.yaml --validate=false'
+                            }
+                        }
+                    }
                 }
             }
         }
+
     }
 }
