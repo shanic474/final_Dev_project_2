@@ -11,6 +11,11 @@ COPY . ./
 # Only build if frontend
 RUN if [ "$APP_TYPE" = "frontend" ]; then npm run build; fi
 
+# After building client/dashboard
+RUN npm install -g serve
+CMD ["serve", "-s", "dist", "-l", "80"]
+
+
 # Stage 2: production
 FROM nginx:alpine AS frontend
 WORKDIR /usr/share/nginx/html
