@@ -23,13 +23,19 @@ pipeline {
         stage('Clone Repos') {
             parallel {
                 stage('Clone server') {
-                    steps { sh 'git clone --branch dev --single-branch https://github.com/shanic474/Server-FullStack-final-Project.git server' }
+                    steps {
+                        sh 'git clone --branch dev --single-branch https://github.com/shanic474/Server-FullStack-final-Project.git server'
+                    }
                 }
                 stage('Clone client') {
-                    steps { sh 'git clone --branch dev --single-branch https://github.com/shanic474/Client-FullStack-final-Project.git client' }
+                    steps {
+                        sh 'git clone --branch dev --single-branch https://github.com/shanic474/Client-FullStack-final-Project.git client'
+                    }
                 }
                 stage('Clone dashboard') {
-                    steps { sh 'git clone --branch dev --single-branch https://github.com/shanic474/Dashboard-FullStack-final-Project.git dashboard' }
+                    steps {
+                        sh 'git clone --branch dev --single-branch https://github.com/shanic474/Dashboard-FullStack-final-Project.git dashboard'
+                    }
                 }
             }
         }
@@ -37,13 +43,19 @@ pipeline {
         stage('Build Docker Images') {
             parallel {
                 stage('Build server') {
-                    steps { sh 'docker build --no-cache --build-arg APP_NAME=server --build-arg APP_TYPE=backend -t s10shani/server-app:latest -f Dockerfile ./server' }
+                    steps {
+                        sh 'docker build --no-cache --build-arg APP_TYPE=backend -t s10shani/server-app:latest -f Dockerfile ./server'
+                    }
                 }
                 stage('Build client') {
-                    steps { sh 'docker build --no-cache --build-arg APP_NAME=client --build-arg APP_TYPE=frontend -t s10shani/client-app:latest -f Dockerfile ./client' }
+                    steps {
+                        sh 'docker build --no-cache --build-arg APP_TYPE=frontend -t s10shani/client-app:latest -f Dockerfile ./client'
+                    }
                 }
                 stage('Build dashboard') {
-                    steps { sh 'docker build --no-cache --build-arg APP_NAME=dashboard --build-arg APP_TYPE=frontend -t s10shani/dashboard-app:latest -f Dockerfile ./dashboard' }
+                    steps {
+                        sh 'docker build --no-cache --build-arg APP_TYPE=frontend -t s10shani/dashboard-app:latest -f Dockerfile ./dashboard'
+                    }
                 }
             }
         }
@@ -72,6 +84,18 @@ pipeline {
                     kubectl apply -f proj2-service-dashboard.yaml
                 '''
             }
+        }
+    }
+
+    post {
+        always {
+            echo "Pipeline finished"
+        }
+        success {
+            echo "All apps deployed successfully!"
+        }
+        failure {
+            echo "Pipeline failed. Check logs."
         }
     }
 }
