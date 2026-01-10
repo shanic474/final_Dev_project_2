@@ -70,8 +70,8 @@ pipeline {
                                     """
                                     
                                     // Apply K3s deployment/service
-                                    sh "kubectl --kubeconfig=${KUBECONFIG} apply -f ${tempDeployment}"
-                                    sh "kubectl --kubeconfig=${KUBECONFIG} apply -f ${tempService}"
+                                    sh "kubectl --kubeconfig=${KUBECONFIG} apply -f ${tempDeployment}" --validate=false"
+                                    sh "kubectl --kubeconfig=${KUBECONFIG} apply -f ${tempService}" --validate=false"
                                     
                                     // Rollout restart
                                     sh "kubectl --kubeconfig=${KUBECONFIG} rollout restart deployment ${app.name}-deployment"
