@@ -2,44 +2,69 @@ pipeline {
     agent any
 
     environment {
-        DOCKER_USER = 's10shani'
-        DOCKER_PASS = credentials('dockerhub-credentials')
-        KUBECONFIG = '/var/lib/jenkins/.kube/config' // צריך kubeconfig עם הרשאות
+        APP_SERVER = 's10shani/server-app'
+        APP_CLIENT = 's10shani/client-app'
+        APP_DASHBOARD = 's10shani/dashboard-app'
+        TAG = 'latest'
     }
 
     stages {
 
         stage('Clean Old Apps') {
-            steps { sh 'rm -rf server client dashboard' }
+            steps {
+                sh 'rm -rf server client dashboard'
+            }
         }
 
         stage('Clone Repos') {
             parallel {
-                stage('Clone server') { steps { sh 'git clone --branch dev --single-branch https://github.com/shanic474/Server-FullStack-final-Project.git server' } }
-                stage('Clone client') { steps { sh 'git clone --branch dev --single-branch https://github.com/shanic474/Client-FullStack-final-Project.git client' } }
-                stage('Clone dashboard') { steps { sh 'git clone --branch dev --single-branch https://github.com/shanic474/Dashboard-FullStack-final-Project.git dashboard' } }
+                stage('Clone server') {
+                    steps {
+                        sh 'git clone --branch dev --single-branch https://github.com/shanic474/Server-FullStack-final-Project.git server'
+                    }
+                }
+                stage('Clone client') {
+                    steps {
+                        sh 'git clone --branch dev --single-branch https://github.com/shanic474/Client-FullStack-final-Project.git client'
+                    }
+                }
+                stage('Clone dashboard') {
+                    steps {
+                        sh 'git clone --branch dev --single-branch https://github.com/shanic474/Dashboard-FullStack-final-Project.git dashboard'
+                    }
+                }
             }
         }
 
         stage('Build Docker Images') {
             parallel {
-                stage('Build server') { steps { sh 'docker build --no-cache --build-arg APP_NAME=server --build-arg APP_TYPE=backend -t s10shani/server-app:latest -f Dockerfile ./server' } }
-                stage('Build client') { steps { sh 'docker build --no-cache --build-arg APP_NAME=client --build-arg APP_TYPE=frontend -t s10shani/client-app:latest -f Dockerfile ./client' } }
-                stage('Build dashboard') { steps { sh 'docker build --no-cache --build-arg APP_NAME=dashboard --build-arg APP_TYPE=frontend -t s10shani/dashboard-app:latest -f Dockerfile ./dashboard' } }
+                stage('Build server') {
+                    steps {
+                        sh 'docker build --no-cache --build-arg APP_NAME=server --build-arg APP_TYPE=backend -t $APP_SERVER:$TAG -f Dockerfile ./server'
+                    }
+                }
+                stage('Build client') {
+                    steps {
+                        sh 'docker build --no-cache --build-arg APP_NAME=client --build-arg APP_TYPE=frontend -t $APP_CLIENT:$TAG -f Dockerfile ./client'
+                    }
+                }
+                stage('Build dashboard') {
+                    steps {
+                        sh 'docker build --no-cache --build-arg APP_NAME=dashboard --build-arg APP_TYPE=frontend -t $APP_DASHBOARD:$TAG -f Dockerfile ./dashboard'
+                    }
+                }
             }
         }
 
         stage('Tag & Push Docker Images') {
             steps {
-                withCredentials([string(credentialsId: 'dockerhub-credentials', variable: 'DOCKER_PASS')]) {
+                // כאן משתמשים ב-usernamePassword עבור Docker Hub
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
                     sh '''
                         echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
-                        docker tag s10shani/server-app:latest s10shani/server-app:20
-                        docker tag s10shani/client-app:latest s10shani/client-app:20
-                        docker tag s10shani/dashboard-app:latest s10shani/dashboard-app:20
-                        docker push s10shani/server-app:20
-                        docker push s10shani/client-app:20
-                        docker push s10shani/dashboard-app:20
+                        docker push $APP_SERVER:$TAG
+                        docker push $APP_CLIENT:$TAG
+                        docker push $APP_DASHBOARD:$TAG
                     '''
                 }
             }
@@ -49,107 +74,22 @@ pipeline {
             parallel {
                 stage('Deploy Server') {
                     steps {
-                        script {
-                            sh 'cp proj2-deployment.yaml temp-server-deployment.yaml'
-                            sh 'cp proj2-service.yaml temp-server-service.yaml'
-                            sh 'sed -i s|\\${APP_NAME}|server|g temp-server-deployment.yaml temp-server-service.yaml'
-                            sh 'sed -i s|\\${APP_IMAGE}|s10shani/server-app:20|g temp-server-deployment.yaml'
-                            sh 'sed -i s|\\${NODE_PORT}|30001|g temp-server-service.yaml'
-
-                            // Retry עם המתנה 30 שניות בין נסיונות, עד 10 דקות
-                            timeout(time: 10, unit: 'MINUTES') {
-                                waitUntil {
-                                    try {
-                                        sh '''
-                                            kubectl --kubeconfig=$KUBECONFIG apply -f temp-server-deployment.yaml --validate=false
-                                            kubectl --kubeconfig=$KUBECONFIG rollout status deployment server-deployment --timeout=30s
-                                        '''
-                                        return true
-                                    } catch (Exception e) {
-                                        echo "Server not ready, waiting 30s..."
-                                        sleep 30
-                                        return false
-                                    }
-                                }
-                            }
+                        retry(3) {
+                            sh './deploy-server.sh'
                         }
                     }
                 }
-
                 stage('Deploy Client') {
                     steps {
-                        script {
-                            // מחכה ל-server
-                            timeout(time: 10, unit: 'MINUTES') {
-                                waitUntil {
-                                    try {
-                                        sh 'kubectl --kubeconfig=$KUBECONFIG rollout status deployment server-deployment --timeout=30s'
-                                        return true
-                                    } catch (Exception e) {
-                                        echo "Server not ready, waiting 30s..."
-                                        sleep 30
-                                        return false
-                                    }
-                                }
-                            }
-
-                            sh 'cp proj2-deployment.yaml temp-client-deployment.yaml'
-                            sh 'cp proj2-service.yaml temp-client-service.yaml'
-                            sh 'sed -i s|\\${APP_NAME}|client|g temp-client-deployment.yaml temp-client-service.yaml'
-                            sh 'sed -i s|\\${APP_IMAGE}|s10shani/client-app:20|g temp-client-deployment.yaml'
-                            sh 'sed -i s|\\${NODE_PORT}|30002|g temp-client-service.yaml'
-
-                            timeout(time: 10, unit: 'MINUTES') {
-                                waitUntil {
-                                    try {
-                                        sh 'kubectl --kubeconfig=$KUBECONFIG apply -f temp-client-deployment.yaml --validate=false'
-                                        return true
-                                    } catch (Exception e) {
-                                        echo "Client deployment failed, retrying in 30s..."
-                                        sleep 30
-                                        return false
-                                    }
-                                }
-                            }
+                        retry(3) {
+                            sh './deploy-client.sh'
                         }
                     }
                 }
-
                 stage('Deploy Dashboard') {
                     steps {
-                        script {
-                            // מחכה ל-server
-                            timeout(time: 10, unit: 'MINUTES') {
-                                waitUntil {
-                                    try {
-                                        sh 'kubectl --kubeconfig=$KUBECONFIG rollout status deployment server-deployment --timeout=30s'
-                                        return true
-                                    } catch (Exception e) {
-                                        echo "Server not ready, waiting 30s..."
-                                        sleep 30
-                                        return false
-                                    }
-                                }
-                            }
-
-                            sh 'cp proj2-deployment.yaml temp-dashboard-deployment.yaml'
-                            sh 'cp proj2-service.yaml temp-dashboard-service.yaml'
-                            sh 'sed -i s|\\${APP_NAME}|dashboard|g temp-dashboard-deployment.yaml temp-dashboard-service.yaml'
-                            sh 'sed -i s|\\${APP_IMAGE}|s10shani/dashboard-app:20|g temp-dashboard-deployment.yaml'
-                            sh 'sed -i s|\\${NODE_PORT}|30003|g temp-dashboard-service.yaml'
-
-                            timeout(time: 10, unit: 'MINUTES') {
-                                waitUntil {
-                                    try {
-                                        sh 'kubectl --kubeconfig=$KUBECONFIG apply -f temp-dashboard-deployment.yaml --validate=false'
-                                        return true
-                                    } catch (Exception e) {
-                                        echo "Dashboard deployment failed, retrying in 30s..."
-                                        sleep 30
-                                        return false
-                                    }
-                                }
-                            }
+                        retry(3) {
+                            sh './deploy-dashboard.sh'
                         }
                     }
                 }
