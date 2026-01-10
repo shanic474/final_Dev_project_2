@@ -45,7 +45,7 @@ pipeline {
             }
         }
 
-        stage('Deploy Apps in Parallel') {
+        stage('Deploy Apps with Wait & Retry') {
             parallel {
                 stage('Deploy Server') {
                     steps {
@@ -56,12 +56,21 @@ pipeline {
                             sh 'sed -i s|\\${APP_IMAGE}|s10shani/server-app:20|g temp-server-deployment.yaml'
                             sh 'sed -i s|\\${NODE_PORT}|30001|g temp-server-service.yaml'
 
-                            // Retry ל-server
-                            retry(3) {
-                                sh '''
-                                    kubectl --kubeconfig=$KUBECONFIG apply -f temp-server-deployment.yaml --validate=false
-                                    kubectl --kubeconfig=$KUBECONFIG rollout status deployment server-deployment --timeout=120s
-                                '''
+                            // Retry עם המתנה 30 שניות בין נסיונות, עד 10 דקות
+                            timeout(time: 10, unit: 'MINUTES') {
+                                waitUntil {
+                                    try {
+                                        sh '''
+                                            kubectl --kubeconfig=$KUBECONFIG apply -f temp-server-deployment.yaml --validate=false
+                                            kubectl --kubeconfig=$KUBECONFIG rollout status deployment server-deployment --timeout=30s
+                                        '''
+                                        return true
+                                    } catch (Exception e) {
+                                        echo "Server not ready, waiting 30s..."
+                                        sleep 30
+                                        return false
+                                    }
+                                }
                             }
                         }
                     }
@@ -70,9 +79,18 @@ pipeline {
                 stage('Deploy Client') {
                     steps {
                         script {
-                            // מחכה ל-server להיות מוכן
-                            retry(3) {
-                                sh 'kubectl --kubeconfig=$KUBECONFIG rollout status deployment server-deployment --timeout=120s || exit 1'
+                            // מחכה ל-server
+                            timeout(time: 10, unit: 'MINUTES') {
+                                waitUntil {
+                                    try {
+                                        sh 'kubectl --kubeconfig=$KUBECONFIG rollout status deployment server-deployment --timeout=30s'
+                                        return true
+                                    } catch (Exception e) {
+                                        echo "Server not ready, waiting 30s..."
+                                        sleep 30
+                                        return false
+                                    }
+                                }
                             }
 
                             sh 'cp proj2-deployment.yaml temp-client-deployment.yaml'
@@ -81,9 +99,17 @@ pipeline {
                             sh 'sed -i s|\\${APP_IMAGE}|s10shani/client-app:20|g temp-client-deployment.yaml'
                             sh 'sed -i s|\\${NODE_PORT}|30002|g temp-client-service.yaml'
 
-                            // Retry ל-client
-                            retry(3) {
-                                sh 'kubectl --kubeconfig=$KUBECONFIG apply -f temp-client-deployment.yaml --validate=false'
+                            timeout(time: 10, unit: 'MINUTES') {
+                                waitUntil {
+                                    try {
+                                        sh 'kubectl --kubeconfig=$KUBECONFIG apply -f temp-client-deployment.yaml --validate=false'
+                                        return true
+                                    } catch (Exception e) {
+                                        echo "Client deployment failed, retrying in 30s..."
+                                        sleep 30
+                                        return false
+                                    }
+                                }
                             }
                         }
                     }
@@ -92,9 +118,18 @@ pipeline {
                 stage('Deploy Dashboard') {
                     steps {
                         script {
-                            // מחכה ל-server להיות מוכן
-                            retry(3) {
-                                sh 'kubectl --kubeconfig=$KUBECONFIG rollout status deployment server-deployment --timeout=120s || exit 1'
+                            // מחכה ל-server
+                            timeout(time: 10, unit: 'MINUTES') {
+                                waitUntil {
+                                    try {
+                                        sh 'kubectl --kubeconfig=$KUBECONFIG rollout status deployment server-deployment --timeout=30s'
+                                        return true
+                                    } catch (Exception e) {
+                                        echo "Server not ready, waiting 30s..."
+                                        sleep 30
+                                        return false
+                                    }
+                                }
                             }
 
                             sh 'cp proj2-deployment.yaml temp-dashboard-deployment.yaml'
@@ -103,15 +138,22 @@ pipeline {
                             sh 'sed -i s|\\${APP_IMAGE}|s10shani/dashboard-app:20|g temp-dashboard-deployment.yaml'
                             sh 'sed -i s|\\${NODE_PORT}|30003|g temp-dashboard-service.yaml'
 
-                            // Retry ל-dashboard
-                            retry(3) {
-                                sh 'kubectl --kubeconfig=$KUBECONFIG apply -f temp-dashboard-deployment.yaml --validate=false'
+                            timeout(time: 10, unit: 'MINUTES') {
+                                waitUntil {
+                                    try {
+                                        sh 'kubectl --kubeconfig=$KUBECONFIG apply -f temp-dashboard-deployment.yaml --validate=false'
+                                        return true
+                                    } catch (Exception e) {
+                                        echo "Dashboard deployment failed, retrying in 30s..."
+                                        sleep 30
+                                        return false
+                                    }
+                                }
                             }
                         }
                     }
                 }
             }
         }
-
     }
 }
