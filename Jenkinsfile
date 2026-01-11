@@ -20,7 +20,7 @@ pipeline {
                 stage('Clone Server') {
                     steps {
                         dir('Server-FullStack-final-Project') {
-                            git branch: 'dev',
+                            git branch: 'main',   // <-- main branch
                                 url: 'https://github.com/shanic474/Server-FullStack-final-Project.git'
                         }
                     }
@@ -29,7 +29,7 @@ pipeline {
                 stage('Clone Client') {
                     steps {
                         dir('Client-FullStack-final-Project') {
-                            git branch: 'dev',
+                            git branch: 'main',   // <-- main branch
                                 url: 'https://github.com/shanic474/Client-FullStack-final-Project.git'
                         }
                     }
@@ -38,7 +38,7 @@ pipeline {
                 stage('Clone Dashboard') {
                     steps {
                         dir('Dashboard-FullStack-final-Project') {
-                            git branch: 'dev',
+                            git branch: 'dev',    // <-- dev branch
                                 url: 'https://github.com/shanic474/Dashboard-FullStack-final-Project.git'
                         }
                     }
@@ -78,10 +78,10 @@ pipeline {
         stage('Push Images') {
             steps {
                 sh '''
-                  echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
-                  docker push s10shani/server-app:latest
-                  docker push s10shani/client-app:latest
-                  docker push s10shani/dashboard-app:latest
+                    echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
+                    docker push s10shani/server-app:latest
+                    docker push s10shani/client-app:latest
+                    docker push s10shani/dashboard-app:latest
                 '''
             }
         }
@@ -89,12 +89,12 @@ pipeline {
         stage('Deploy to Kubernetes') {
             steps {
                 sh '''
-                  kubectl apply -f proj2-deployment-server.yaml
-                  kubectl apply -f proj2-service-server.yaml
-                  kubectl apply -f proj2-deployment-client.yaml
-                  kubectl apply -f proj2-service-client.yaml
-                  kubectl apply -f proj2-deployment-dashboard.yaml
-                  kubectl apply -f proj2-service-dashboard.yaml
+                    kubectl apply -f proj2-deployment-server.yaml
+                    kubectl apply -f proj2-service-server.yaml
+                    kubectl apply -f proj2-deployment-client.yaml
+                    kubectl apply -f proj2-service-client.yaml
+                    kubectl apply -f proj2-deployment-dashboard.yaml
+                    kubectl apply -f proj2-service-dashboard.yaml
                 '''
             }
         }
