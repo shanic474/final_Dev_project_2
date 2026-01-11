@@ -51,31 +51,25 @@ pipeline {
 
                 stage('Build Server') {
                     steps {
-                        sh '''
-                          docker build \
-                          -t s10shani/server-app:latest \
-                          Server-FullStack-final-Project
-                        '''
+                        dir('Server-FullStack-final-Project') {
+                            sh 'docker build -t s10shani/server-app:latest .'
+                        }
                     }
                 }
 
                 stage('Build Client') {
                     steps {
-                        sh '''
-                          docker build \
-                          -t s10shani/client-app:latest \
-                          Client-FullStack-final-Project
-                        '''
+                        dir('Client-FullStack-final-Project') {
+                            sh 'docker build -t s10shani/client-app:latest .'
+                        }
                     }
                 }
 
                 stage('Build Dashboard') {
                     steps {
-                        sh '''
-                          docker build \
-                          -t s10shani/dashboard-app:latest \
-                          Dashboard-FullStack-final-Project
-                        '''
+                        dir('Dashboard-FullStack-final-Project') {
+                            sh 'docker build -t s10shani/dashboard-app:latest .'
+                        }
                     }
                 }
             }
