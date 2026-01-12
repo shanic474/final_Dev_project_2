@@ -1,6 +1,11 @@
 pipeline {
     agent any
 
+    environment {
+        DOCKERHUB_CREDS = credentials('dockerhub-credentials')
+        DOCKER_USER = 's10shani'
+    }
+
     stages {
 
         stage('Clean Workspace') {
@@ -9,7 +14,13 @@ pipeline {
             }
         }
 
-        stage('Clone Repositories') {
+        stage('Checkout Pipeline Repo') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Clone Application Repositories') {
             parallel {
 
                 stage('Clone Server') {
@@ -72,18 +83,13 @@ pipeline {
 
         stage('Push Images to Docker Hub') {
             steps {
-                withCredentials([usernamePassword(
-                    credentialsId: 'dockerhub-credentials',
-                    usernameVariable: 'DOCKER_USER',
-                    passwordVariable: 'DOCKER_PASS'
-                )]) {
-                    sh '''
-                        echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
-                        docker push s10shani/server-app:latest
-                        docker push s10shani/client-app:latest
-                        docker push s10shani/dashboard-app:latest
-                    '''
-                }
+                sh '''
+                    echo "$DOCKERHUB_CREDS_PSW" | docker login -u "$DOCKERHUB_CREDS_USR" --password-stdin
+
+                    docker push s10shani/server-app:latest
+                    docker push s10shani/client-app:latest
+                    docker push s10shani/dashboard-app:latest
+                '''
             }
         }
 
@@ -100,6 +106,15 @@ pipeline {
                     kubectl apply -f proj2-service-dashboard.yaml
                 '''
             }
+        }
+    }
+
+    post {
+        success {
+            echo '✅ Pipeline completed successfully'
+        }
+        failure {
+            echo '❌ Pipeline failed'
         }
     }
 }
