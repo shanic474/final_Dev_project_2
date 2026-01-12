@@ -2,6 +2,8 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: dashboard-deployment
+  labels:
+    app: dashboard
 spec:
   replicas: 2
   selector:
@@ -15,6 +17,12 @@ spec:
       containers:
         - name: dashboard-container
           image: s10shani/dashboard-app:latest
-          imagePullPolicy: Always
           ports:
             - containerPort: 80
+          resources:
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
