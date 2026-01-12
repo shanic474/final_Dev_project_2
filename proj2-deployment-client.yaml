@@ -16,13 +16,6 @@ spec:
     spec:
       containers:
         - name: client-container
-          image: s10shani/client-app:latest
+          image: s10shani/client-app:latest   # <- real image
           ports:
             - containerPort: 80
-          resources:
-            limits:
-              memory: "512Mi"
-              cpu: "500m"
-            requests:
-              memory: "256Mi"
-              cpu: "250m"
