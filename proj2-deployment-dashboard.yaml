@@ -15,6 +15,6 @@ spec:
       containers:
         - name: dashboard-container
           image: s10shani/dashboard-app:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
             - containerPort: 80
