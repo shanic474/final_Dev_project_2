@@ -15,6 +15,6 @@ spec:
       containers:
         - name: client-container
           image: s10shani/client-app:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
             - containerPort: 80
